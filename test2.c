@@ -5,16 +5,17 @@
 #include <string.h> 
 #include <sys/wait.h> 
 #include <sys/mman.h>
+#include <time.h>
 
-#define SMART_TIME .1   // Smart packet dropping period
+#define SMART_TIME 1   // Smart packet dropping period
 #define QUEUE_TIME 10   // Packet bumping
-#define ARIV_TIME .00001 // 10 microsecond
-#define MAX_QUEUE 20
+#define ARIV_TIME .0001 // 10 microsecond
+#define MAX_QUEUE 100
 // Struct defintion
 struct Queue {
     struct Queue    *next;
     char            ip[18];
-    int             packet; // 0-89 where 0-29 is low 30-59 is med and 60-89 is high (WHEN INITIALLY ADDED TO Q)
+    unsigned int    packet; // 0-89 where 0-29 is low 30-59 is med and 60-89 is high (WHEN INITIALLY ADDED TO Q)
     clock_t         entry_time;
 };
 
@@ -29,7 +30,7 @@ struct Priority {
 struct SmartPacket {
     int         packet;
     clock_t     entry_time;
-}
+};
 
 void* create_shared_memory(size_t size) {
   // Our memory buffer will be readable and writable:
@@ -48,11 +49,6 @@ void* create_shared_memory(size_t size) {
 // Function defns 
 void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4);
 
-/* Create queue object in shared memory */
-struct Queue * init_shared_q() {
-    void *shmem = create_shared_memory(sizeof(struct Queue));
-    return shmem;
-}
 
 /* Remove top of queue */
 void removeHead(struct Queue *q) {
@@ -74,7 +70,7 @@ void init_priority(struct Priority *p) {
 }
 
 /*  */
-struct Queue * createQueue(int val) {
+struct Queue * createPacket(int val) {
     void *shmem = create_shared_memory(sizeof(struct Queue));
     struct Queue *q = (struct Queue *) shmem;
     q->packet = val;
@@ -93,10 +89,16 @@ int checkSmart(struct SmartPacket *sp,int value) {
         if (t->packet == value) {
             cur = (double)(clock()-sp->entry_time)/CLOCKS_PER_SEC;
             if (cur < SMART_TIME) 
-                done = 1;
+                drop = 1;
         }
     }
     return drop;
+}
+
+int numInQueue(struct Queue *) {
+    struct Queue *t;
+    int i;
+    while (i < )
 }
 
 /* Queue Manager increases priority of nodes that have sat for too long */
@@ -153,9 +155,10 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
 
     // Read bytes from a file as input data 
     while(i < f_size) {
-        fread(byte,1,1,fpt);
+        fread(&byte,1,1,fpt);
         if(checkSmart == 0) {
-            bVal = atoi(byte);
+            //bVal = atoi(byte);
+            bVal = (unsigned int) byte;
             if (bVal < 30) {
                 qt = pq->low;
                 for(j=0;j<pq->max_q;j++) {
