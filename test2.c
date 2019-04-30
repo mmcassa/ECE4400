@@ -130,7 +130,7 @@ void qManage(char *argv[],int *fd1,int *fd2,int *fd3,int *fd4) {
         }
         read(fd3[0],&done,sizeof(int));
     }
-
+    printf("exit manage\n");
 
 }
 
@@ -217,6 +217,7 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
     fclose(fpt);
     write(fd1[1],&i,sizeof(int));
     printf("\nSmart Dropped packet Count: %ld\n",smartDrop);
+    
 }
 
 /* Send2recpient */
