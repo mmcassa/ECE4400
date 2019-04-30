@@ -204,10 +204,64 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
 }
 
 /* Send2recpient */
+
+//wait for alleged packet send time
 void send2recp(int *fd1, int *fd2, int *fd3) {
-    int i;
-    while(i < 1000000000) {
-        i++;
+    int i, highq = 0, lowq = 0, medq = 0; 
+	struct Priority *pq; 
+	pq = (struct Priority *) calloc(1,sizeof(struct Priority));
+	read(fd4[0], pq, sizeof(struct Priority));
+    /*
+		Read from pipe4 (fd4) the Priority structure
+		** see qManage/add2q for example
+	*/
+	read(fd1[0],done,sizeof(int));
+	struct Queue tempq;
+    while(1) {
+		read(fd1[0],done,sizeof(int));
+		if (pq.high != NULL){
+			tempq = pq->high;
+			pq.high = pq->high->next; 
+			if (tempq->packet > 59)	highq++;
+			else if (60 >= tempq->packet > 29) medq++;
+			else if (0 <= tempq->packet < 30) lowq ++; 
+			free(tempq);
+		}
+		else if (pq.med != NULL){
+			tempq = pq->med; 
+			pq.med = pq->med->next;
+			if (tempq->packet > 59)	highq++;
+			else if (60 >= tempq->packet > 29) medq++;
+			else if (0 <= tempq->packet < 30) lowq ++; 
+			free(tempq);
+		}
+		else if (pq.low != NULL){
+			tempq = pq->low;
+			pq.low = pq->low->next; 
+			if (tempq->packet > 59)	highq++;
+			else if (60 >= tempq->packet > 29) medq++;
+			else if (0 <= tempq->packet < 30) lowq ++; 
+			free(tempq);
+		}
+		else if (done == 1){
+			break;
+		}
+		i++;
+		sleep(.005);
+
+		/*
+
+			using priority structure, check if any of the queues have packets (in order)
+
+			if found, remove the packet from queue by saving it in a local temp and then 				set queue = queue->next where queue is high, med, low in the Priority structure
+ 
+			increment counters for high, med, low depending on packet "sent"
+
+			
+		*/
+
+
+		// Check if more in queue
     }
 }
 
