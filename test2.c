@@ -1,3 +1,4 @@
+
 #include <stdio.h> 
 #include <stdlib.h> 
 #include <unistd.h> 
@@ -223,8 +224,8 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
 /* Send2recpient */
 
 //wait for alleged packet send time
-void send2recp(int *fd1, int *fd2, int *fd3, int *fd4) {
-    int i,done, highq = 0, lowq = 0, medq = 0; 
+void send2recp(int *fd1, int *fd2, int *fd3) {
+    int i, highq = 0, lowq = 0, medq = 0; 
 	struct Priority *pq; 
 	pq = (struct Priority *) calloc(1,sizeof(struct Priority));
 	read(fd4[0], pq, sizeof(struct Priority));
@@ -232,32 +233,70 @@ void send2recp(int *fd1, int *fd2, int *fd3, int *fd4) {
 		Read from pipe4 (fd4) the Priority structure
 		** see qManage/add2q for example
 	*/
-	//read(fd1[0],done,sizeof(int));
+	read(fd1[0],done,sizeof(int));
 	struct Queue *tempq;
+	clock_t q_time;
+	double low_time, high_time, med_time;
     while(1) {
 		read(fd1[0],&done,sizeof(int));
 		if (pq->high != NULL){
 			tempq = pq->high;
 			pq->high = pq->high->next; 
-			if (tempq->packet > 59)	highq++;
-			else if (60 >= tempq->packet > 29) medq++;
-			else if (0 <= tempq->packet < 30) lowq ++; 
+			if (tempq->packet > 59)	{
+				q_time = clock() - tempq->entry_time;
+				high_time += (double)q_time;
+				highq++;
+			}
+			else if (60 >= tempq->packet > 29){
+				q_time = clock() - tempq->start_time;
+				med_time += (double)q_time;
+				medq++;
+			}
+			else if (0 <= tempq->packet < 30) {
+				q_time = clock() - tempq->start_time;
+				low_time += (double)q_time;
+				lowq++;
+			}
 			free(tempq);
 		}
 		else if (pq->med != NULL){
 			tempq = pq->med; 
 			pq->med = pq->med->next;
-			if (tempq->packet > 59)	highq++;
-			else if (60 >= tempq->packet > 29) medq++;
-			else if (0 <= tempq->packet < 30) lowq ++; 
+			if (tempq->packet > 59){
+				q_time = clock() - tempq->entry_time;
+				high_time += q_time;
+				highq++;
+			}
+			else if (60 >= tempq->packet > 29){
+				q_time = clock() - tempq->start_time;
+				med_time += (double)q_time;
+				medq++;
+			}
+			else if (0 <= tempq->packet < 30){
+				q_time = clock() - tempq->start_time;
+				low_time += (double)q_time;
+				lowq++;
+			}
 			free(tempq);
 		}
 		else if (pq->low != NULL){
 			tempq = pq->low;
 			pq->low = pq->low->next; 
-			if (tempq->packet > 59)	highq++;
-			else if (60 >= tempq->packet > 29) medq++;
-			else if (0 <= tempq->packet < 30) lowq ++; 
+			if (tempq->packet > 59)	{
+				q_time = clock() - tempq->entry_time;
+				high_time += q_time;
+				highq++;
+			}
+			else if (60 >= tempq->packet > 29){
+				q_time = clock() - tempq->start_time;
+				med_time += (double)q_time;
+				medq++;
+			}
+			else if (0 <= tempq->packet < 30){
+				q_time = clock() - tempq->start_time;
+				low_time += (double)q_time;
+				lowq++;
+			}
 			free(tempq);
 		}
 		else if (done == 1){
@@ -267,19 +306,20 @@ void send2recp(int *fd1, int *fd2, int *fd3, int *fd4) {
 		sleep(.005);
 
 		/*
-
 			using priority structure, check if any of the queues have packets (in order)
 
 			if found, remove the packet from queue by saving it in a local temp and then 				set queue = queue->next where queue is high, med, low in the Priority structure
  
 			increment counters for high, med, low depending on packet "sent"
-
-			
 		*/
-
 
 		// Check if more in queue
     }
+	double avg_ht = high_time/highq; 
+	double avg_mt = med_time/medq;
+	double avg_lt = low_time/lowq;
+	printf("average time for high priority packets: %d\nAverage time for medium priority packets: %d\nAverage time for low priority packets: %d\n", avg_ht, avg_mt, avg_lt);
+	printf("Number of high priority packets processed: %d\nNumber of medium priority packets: %d\nNumber of low priority packets processed: %d\n", highq, medq, lowq);
 }
 
 int main(int argc, char *argv[]) {
