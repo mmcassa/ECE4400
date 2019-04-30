@@ -10,7 +10,7 @@
 
 #define SMART_TIME 1   // Smart packet dropping period
 #define QUEUE_TIME 10   // Packet bumping
-#define ARIV_TIME .01 // 10 microsecond
+#define ARIV_TIME .0001 // 10 microsecond
 #define MAX_QUEUE 100
 // Struct defintion
 struct Queue {
@@ -165,11 +165,12 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
     pq =  (struct Priority *) calloc(1,sizeof(struct Priority));
     read(fd4[0],pq,sizeof(struct Priority ));
     printf("Confirm max queue: %d\n",pq->max_q);
-
+    struct SmartPacket *smartQ;
+    
     // Read bytes from a file as input data 
     while(i < f_size) {
         fread(&byte,1,1,fpt);
-        if(checkSmart == 0) {
+        if(checkSmart(smartQ,(int)byte) == 0) {
             //bVal = atoi(byte);
             bVal = (unsigned int) byte;
             if (bVal < 30) {
@@ -192,7 +193,7 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
                         qt->next = createPacket(bVal);
                     }
                 }
-            } else if (bVal < 90) {
+            } else {
                 qt = pq->high;
                 for(j=0;j<pq->max_q;j++) {
                     if (qt == NULL) {
@@ -202,9 +203,11 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
                         qt->next = createPacket(bVal);
                     }
                 }
-            } else {
-
-            }
+            } 
+            // Add to smart q
+            smartQ = (struct SmartPacket *) calloc(1,sizeof(struct SmartPacket));
+            smartQ->packet = (int) byte;
+            smartQ->entry_time = clock();
         } else {
             smartDrop++;
         }
@@ -252,7 +255,7 @@ void send2recp(int *fd1, int *fd2, int *fd3,int *fd4) {
 				med_time += (double)q_time;
 				medq++;
 			}
-			else if (0 <= tempq->packet < 30) {
+			else {
 				q_time = clock() - tempq->entry_time;
 				low_time += (double)q_time;
 				lowq++;
@@ -318,7 +321,7 @@ void send2recp(int *fd1, int *fd2, int *fd3,int *fd4) {
 	double avg_ht = high_time/highq; 
 	double avg_mt = med_time/medq;
 	double avg_lt = low_time/lowq;
-	printf("\naverage time for high priority packets: %f\nAverage time for medium priority packets: %f\nAverage time for low priority packets: %f\n", avg_ht, avg_mt, avg_lt);
+	printf("\nAverage time for high priority packets: %f\nAverage time for medium priority packets: %f\nAverage time for low priority packets: %f\n", avg_ht, avg_mt, avg_lt);
 	printf("Number of high priority packets processed: %d\nNumber of medium priority packets: %d\nNumber of low priority packets processed: %d\n", highq, medq, lowq);
 }
 
