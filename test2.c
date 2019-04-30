@@ -4,10 +4,11 @@
 #include <sys/types.h> 
 #include <string.h> 
 #include <sys/wait.h> 
+#include <sys/mman.h>
 
 #define MAX_TIME 10
 #define ARIV_TIME .00001 // 10 microsecond
-
+#define MAX_QUEUE 20
 // Struct defintion
 struct Queue {
     struct Queue    *next;
@@ -20,12 +21,31 @@ struct Queue {
 struct Priority {
     struct Queue *low,*med,*high;
     unsigned int max_q; // Maximum number of items in any of the queues
+    unsigned int count[3]; // 0 is low, 1 is medium, 2 is high
 };
+
+void* create_shared_memory(size_t size) {
+  // Our memory buffer will be readable and writable:
+  int protection = PROT_READ | PROT_WRITE;
+
+  // The buffer will be shared (meaning other processes can access it), but
+  // anonymous (meaning third-party processes cannot obtain an address for it),
+  // so only this process and its children will be able to use it:
+  int visibility = MAP_ANONYMOUS | MAP_SHARED;
+
+  // The remaining parameters to `mmap()` are not important for this use case,
+  // but the manpage for `mmap` explains their purpose.
+  return mmap(NULL, size, protection, visibility, 0, 0);
+}
 
 // Function defns 
 void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4);
 
-
+/* Create queue object in shared memory */
+struct Queue * init_shared_q() {
+    void *shmem = create_shared_memory(sizeof(struct Queue));
+    return shmem;
+}
 
 /* Remove top of queue */
 void removeHead(struct Queue *q) {
@@ -39,23 +59,25 @@ void init_priority(struct Priority *p) {
     p->low = NULL;
     p->med = NULL;
     p->high = NULL;
-    p->max_q = 20;
+    p->max_q = MAX_QUEUE;
 }
+
+
 
 /* Queue Manager removes nodes that have been sitting for too long */
 void qManage(char *argv[],int *fd1,int *fd2,int *fd3,int *fd4) {
     struct Priority *pq;
-    pq =  (struct Priority *) calloc(1,sizeof(struct Priority));
+
+    
+    
     // Initialize Priority Queue and write the pointer to pipe 4
+    void *vp = create_shared_memory(sizeof(struct Priority));
+    pq = (struct Priority *) vp;
     init_priority(pq);
-    int pid2 = fork();
-    if (pid2 == 0) {
-        add2queue(argv,fd1,fd2,fd3,fd4);
-        return;
-    } 
+    
+    write(fd4[1],pq,sizeof(struct Priority ));
     printf("Max packets in each Queue: %d\n",pq->max_q);
-    write(fd4[1],pq,sizeof(struct Priority *));
-    printf("written\n");
+    
     // Start Management
     while(1) {
         
@@ -69,7 +91,7 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
     FILE *fpt;
     char IPs[][18] = {"10.1.152.111","10.1.152.123","10.1.152.253","00.0.000.000"};
     int i;
-    char init4[100];
+    char init4[100],byte;
     fpt = fopen(argv[1],"rb");
     if (fpt == NULL) {
         printf("Unable to open %s for read.\nExiting now.\n",argv[1]);
@@ -92,9 +114,11 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
 
     // Read bytes from a file as input data 
     while(i < f_size) {
-        
+        fread(byte,1,1,fpt);
+        if
 
         i++;
+        sleep(ARIV_TIME);
     }
 
 
@@ -139,6 +163,10 @@ int main(int argc, char *argv[]) {
         return 1; 
     } 
 
+
+    // Create Shared memory
+    //void* shmem = create_shared_memory(sizeof(struct Queue)*3*MAX_QUEUE);
+
     pid = fork();
     
     // Add2q
@@ -153,7 +181,7 @@ int main(int argc, char *argv[]) {
             fprintf(stderr, "Pipe Failed" ); 
             return 1; 
         }
-        pid2 = 1;//fork();
+        pid2 = fork();
         if (pid2 == 0) {
             add2queue(argv,fd1,fd2,fd3,fd4);
         } else {
