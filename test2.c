@@ -9,7 +9,7 @@
 
 #define SMART_TIME 1   // Smart packet dropping period
 #define QUEUE_TIME 10   // Packet bumping
-#define ARIV_TIME .0001 // 10 microsecond
+#define ARIV_TIME .01 // 10 microsecond
 #define MAX_QUEUE 100
 // Struct defintion
 struct Queue {
@@ -102,15 +102,16 @@ int numInQueue(struct Queue *q) {
         i++;
         t = t->next;
     }
-    return i;
+    return i;   
 }
 
 /* Queue Manager increases priority of nodes that have sat for too long */
 void qManage(char *argv[],int *fd1,int *fd2,int *fd3,int *fd4) {
     struct Priority *pq;
-
-    
-    
+    int done = 0;
+    double dur,future;
+    clock_t start = clock();
+    future = (double)(clock()-start)/CLOCKS_PER_SEC+.2;
     // Initialize Priority Queue and write the pointer to pipe 4
     void *vp = create_shared_memory(sizeof(struct Priority));
     pq = (struct Priority *) vp;
@@ -119,9 +120,15 @@ void qManage(char *argv[],int *fd1,int *fd2,int *fd3,int *fd4) {
     write(fd4[1],pq,sizeof(struct Priority ));
     printf("Max packets in each Queue: %d\n",pq->max_q);
     
+    read(fd3[0],&done,sizeof(int));
     // Start Management
-    while(1) {
+    while(done != 1) {
         
+        if((double)((clock()-start)/CLOCKS_PER_SEC) > future) {
+            printf("low: %d, med %d, high %d\n",numInQueue(pq->low),numInQueue(pq->med),numInQueue(pq->high));
+            future = (double)(clock()-start)/CLOCKS_PER_SEC +.5;
+        }
+        read(fd3[0],&done,sizeof(int));
     }
 
 
@@ -136,7 +143,8 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
     unsigned long int lost[] = {0,0,0};
     char init4[100],byte;
     struct Queue *qt; // temp packet
-
+    i = 0;
+    write(fd1[1],&i,sizeof(int));
 
     fpt = fopen(argv[1],"rb");
     if (fpt == NULL) {
