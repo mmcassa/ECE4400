@@ -6,7 +6,8 @@
 #include <sys/wait.h> 
 #include <sys/mman.h>
 
-#define MAX_TIME 10
+#define SMART_TIME .1   // Smart packet dropping period
+#define QUEUE_TIME 10   // Packet bumping
 #define ARIV_TIME .00001 // 10 microsecond
 #define MAX_QUEUE 20
 // Struct defintion
@@ -14,15 +15,21 @@ struct Queue {
     struct Queue    *next;
     char            ip[18];
     int             packet; // 0-89 where 0-29 is low 30-59 is med and 60-89 is high (WHEN INITIALLY ADDED TO Q)
-    clock_t         entry_time,sent_time;
+    clock_t         entry_time;
 };
 
 // The three queues to be passed between pipes
 struct Priority {
     struct Queue *low,*med,*high;
     unsigned int max_q; // Maximum number of items in any of the queues
-    unsigned int count[3]; // 0 is low, 1 is medium, 2 is high
+    //unsigned int count[3]; // 0 is low, 1 is medium, 2 is high
 };
+
+// Struct for last queued packets
+struct SmartPacket {
+    int         packet;
+    clock_t     entry_time;
+}
 
 void* create_shared_memory(size_t size) {
   // Our memory buffer will be readable and writable:
@@ -60,11 +67,38 @@ void init_priority(struct Priority *p) {
     p->med = NULL;
     p->high = NULL;
     p->max_q = MAX_QUEUE;
+    //p->count[0] = 0;
+    //p->count[1] = 0;
+    //p->count[2] = 0;
+
 }
 
+/*  */
+struct Queue createQueue(int val) {
+    void *shmem = create_shared_memory(sizeof(struct Queue));
+    struct Queue *q = (struct Queue *) shmem;
+    q->packet = val;
+    q->entry_time = clock();
+    return *q;
+}
 
+/* Checks to see if a packet can be ignored (redundancy check) */
+int checkSmart(struct SmartPacket *sp,int value) {
+    int drop = 0;
+    struct SmartPacket *t = sp;
+    double cur;
+    while(t != NULL) {
+        // If the packets are saying the same thing
+        if (t->packet == value) {
+            cur = (double)(clock()-sp->entry_time)/CLOCKS_PER_SEC;
+            if (cur < SMART_TIME) 
+                done = 1;
+        }
+    }
+    return drop;
+}
 
-/* Queue Manager removes nodes that have been sitting for too long */
+/* Queue Manager increases priority of nodes that have sat for too long */
 void qManage(char *argv[],int *fd1,int *fd2,int *fd3,int *fd4) {
     struct Priority *pq;
 
@@ -90,8 +124,13 @@ void qManage(char *argv[],int *fd1,int *fd2,int *fd3,int *fd4) {
 void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
     FILE *fpt;
     char IPs[][18] = {"10.1.152.111","10.1.152.123","10.1.152.253","00.0.000.000"};
-    int i;
+    int i,j,bVal;
+    unsigned long int smartDrop = 0;
+    unsigned long int lost[] = {0,0,0};
     char init4[100],byte;
+    struct Queue *qt; // temp packet
+
+
     fpt = fopen(argv[1],"rb");
     if (fpt == NULL) {
         printf("Unable to open %s for read.\nExiting now.\n",argv[1]);
@@ -109,20 +148,59 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
     struct Priority *pq;
     pq =  (struct Priority *) calloc(1,sizeof(struct Priority));
     read(fd4[0],pq,sizeof(struct Priority ));
-    printf("read\n");
     printf("Confirm max queue: %d\n",pq->max_q);
 
     // Read bytes from a file as input data 
     while(i < f_size) {
         fread(byte,1,1,fpt);
-        if
+        if(checkSmart == 0) {
+            bVal = atoi(byte);
+            if (bVal < 30) {
+                qt = low;
+                for(j=0;j<pq->max_q;j++) {
+                    if (*qt == NULL)
+                        *low = createPacket(bVal);
+                        break;
+                    else if (qt->next == NULL) {
+                        qt->next = createPacket(bVal);
+                    }
+                }
+            } else if (bVal < 60) {
+                qt = low;
+                for(j=0;j<pq->max_q;j++) {
+                    if (*qt == NULL)
+                        *low = createPacket(bVal);
+                        break;
+                    else if (qt->next == NULL) {
+                        qt->next = createPacket(bVal);
+                    }
+                }
+            } else if (bVal < 90) {
+                qt = low;
+                for(j=0;j<pq->max_q;j++) {
+                    if (qt == NULL)
+                        *low = createPacket(bVal);
+                        break;
+                    else if (qt->next == NULL) {
+                        qt->next = createPacket(bVal);
+                    }
+                }
+            } else {
+
+            }
+        } else {
+            smartDrop++;
+        }
 
         i++;
         sleep(ARIV_TIME);
     }
-
+    i = 1;
+    
 
     fclose(fpt);
+    write(fd1[1],i,sizeof(int));
+    printf("\nSmart Dropped packet Count: %d\n",smartDrop);
 }
 
 /* Send2recpient */
@@ -138,7 +216,7 @@ int main(int argc, char *argv[]) {
     char mesg[] = "This is the initial message.";
     char init[] = "This is the initial message.";
     int slen = strlen(mesg);
-    int fd1[2]; // Top of Queue
+    int fd1[2]; // Done queuing
     int fd2[2]; // Next index (supplied by send2recp)
     int fd3[2]; // Curr index (supplied by qManager)
     int fd4[2]; // full Priority q
