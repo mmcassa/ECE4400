@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 #include <stdio.h> 
 #include <stdlib.h> 
 #include <unistd.h> 
@@ -96,10 +95,14 @@ int checkSmart(struct SmartPacket *sp,int value) {
     return drop;
 }
 
-int numInQueue(struct Queue *) {
-    struct Queue *t;
-    int i;
-    while (i < )
+int numInQueue(struct Queue *q) {
+    struct Queue *t = q;
+    int i=0;
+    while(t != NULL) {
+        i++;
+        t = t->next;
+    }
+    return i;
 }
 
 /* Queue Manager increases priority of nodes that have sat for too long */
