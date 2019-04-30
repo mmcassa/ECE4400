@@ -74,12 +74,13 @@ void init_priority(struct Priority *p) {
 }
 
 /*  */
-struct Queue createQueue(int val) {
+struct Queue * createQueue(int val) {
     void *shmem = create_shared_memory(sizeof(struct Queue));
     struct Queue *q = (struct Queue *) shmem;
     q->packet = val;
+    q->next = NULL;
     q->entry_time = clock();
-    return *q;
+    return q;
 }
 
 /* Checks to see if a packet can be ignored (redundancy check) */
@@ -156,32 +157,32 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
         if(checkSmart == 0) {
             bVal = atoi(byte);
             if (bVal < 30) {
-                qt = low;
+                qt = pq->low;
                 for(j=0;j<pq->max_q;j++) {
-                    if (*qt == NULL)
-                        *low = createPacket(bVal);
+                    if (qt == NULL) {
+                        pq->low = createPacket(bVal);
                         break;
-                    else if (qt->next == NULL) {
+                    }else if (qt->next == NULL) {
                         qt->next = createPacket(bVal);
                     }
                 }
             } else if (bVal < 60) {
-                qt = low;
+                qt = pq->med;
                 for(j=0;j<pq->max_q;j++) {
-                    if (*qt == NULL)
-                        *low = createPacket(bVal);
+                    if (qt == NULL) {
+                        pq->med = createPacket(bVal);
                         break;
-                    else if (qt->next == NULL) {
+                    } else if (qt->next == NULL) {
                         qt->next = createPacket(bVal);
                     }
                 }
             } else if (bVal < 90) {
-                qt = low;
+                qt = pq->high;
                 for(j=0;j<pq->max_q;j++) {
-                    if (qt == NULL)
-                        *low = createPacket(bVal);
+                    if (qt == NULL) {
+                        pq->high = createPacket(bVal);
                         break;
-                    else if (qt->next == NULL) {
+                    } else if (qt->next == NULL) {
                         qt->next = createPacket(bVal);
                     }
                 }
@@ -199,15 +200,15 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
     
 
     fclose(fpt);
-    write(fd1[1],i,sizeof(int));
-    printf("\nSmart Dropped packet Count: %d\n",smartDrop);
+    write(fd1[1],&i,sizeof(int));
+    printf("\nSmart Dropped packet Count: %ld\n",smartDrop);
 }
 
 /* Send2recpient */
 
 //wait for alleged packet send time
-void send2recp(int *fd1, int *fd2, int *fd3) {
-    int i, highq = 0, lowq = 0, medq = 0; 
+void send2recp(int *fd1, int *fd2, int *fd3, int *fd4) {
+    int i,done, highq = 0, lowq = 0, medq = 0; 
 	struct Priority *pq; 
 	pq = (struct Priority *) calloc(1,sizeof(struct Priority));
 	read(fd4[0], pq, sizeof(struct Priority));
@@ -215,29 +216,29 @@ void send2recp(int *fd1, int *fd2, int *fd3) {
 		Read from pipe4 (fd4) the Priority structure
 		** see qManage/add2q for example
 	*/
-	read(fd1[0],done,sizeof(int));
-	struct Queue tempq;
+	//read(fd1[0],done,sizeof(int));
+	struct Queue *tempq;
     while(1) {
-		read(fd1[0],done,sizeof(int));
-		if (pq.high != NULL){
+		read(fd1[0],&done,sizeof(int));
+		if (pq->high != NULL){
 			tempq = pq->high;
-			pq.high = pq->high->next; 
+			pq->high = pq->high->next; 
 			if (tempq->packet > 59)	highq++;
 			else if (60 >= tempq->packet > 29) medq++;
 			else if (0 <= tempq->packet < 30) lowq ++; 
 			free(tempq);
 		}
-		else if (pq.med != NULL){
+		else if (pq->med != NULL){
 			tempq = pq->med; 
-			pq.med = pq->med->next;
+			pq->med = pq->med->next;
 			if (tempq->packet > 59)	highq++;
 			else if (60 >= tempq->packet > 29) medq++;
 			else if (0 <= tempq->packet < 30) lowq ++; 
 			free(tempq);
 		}
-		else if (pq.low != NULL){
+		else if (pq->low != NULL){
 			tempq = pq->low;
-			pq.low = pq->low->next; 
+			pq->low = pq->low->next; 
 			if (tempq->packet > 59)	highq++;
 			else if (60 >= tempq->packet > 29) medq++;
 			else if (0 <= tempq->packet < 30) lowq ++; 
@@ -304,7 +305,7 @@ int main(int argc, char *argv[]) {
     // Add2q
     if (pid == 0) {
 
-        send2recp(fd1,fd2,fd3);
+        send2recp(fd1,fd2,fd3,fd4);
         
     // Send2recip
     } else {
