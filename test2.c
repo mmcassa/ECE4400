@@ -224,8 +224,8 @@ void add2queue(char *argv[],int *fd1,int *fd2,int*fd3,int *fd4) {
 /* Send2recpient */
 
 //wait for alleged packet send time
-void send2recp(int *fd1, int *fd2, int *fd3) {
-    int i, highq = 0, lowq = 0, medq = 0; 
+void send2recp(int *fd1, int *fd2, int *fd3,int *fd4) {
+    int done,i, highq = 0, lowq = 0, medq = 0; 
 	struct Priority *pq; 
 	pq = (struct Priority *) calloc(1,sizeof(struct Priority));
 	read(fd4[0], pq, sizeof(struct Priority));
@@ -233,7 +233,7 @@ void send2recp(int *fd1, int *fd2, int *fd3) {
 		Read from pipe4 (fd4) the Priority structure
 		** see qManage/add2q for example
 	*/
-	read(fd1[0],done,sizeof(int));
+	read(fd1[0],&done,sizeof(int));
 	struct Queue *tempq;
 	clock_t q_time;
 	double low_time, high_time, med_time;
@@ -248,12 +248,12 @@ void send2recp(int *fd1, int *fd2, int *fd3) {
 				highq++;
 			}
 			else if (60 >= tempq->packet > 29){
-				q_time = clock() - tempq->start_time;
+				q_time = clock() - tempq->entry_time;
 				med_time += (double)q_time;
 				medq++;
 			}
 			else if (0 <= tempq->packet < 30) {
-				q_time = clock() - tempq->start_time;
+				q_time = clock() - tempq->entry_time;
 				low_time += (double)q_time;
 				lowq++;
 			}
@@ -268,12 +268,12 @@ void send2recp(int *fd1, int *fd2, int *fd3) {
 				highq++;
 			}
 			else if (60 >= tempq->packet > 29){
-				q_time = clock() - tempq->start_time;
+				q_time = clock() - tempq->entry_time;
 				med_time += (double)q_time;
 				medq++;
 			}
 			else if (0 <= tempq->packet < 30){
-				q_time = clock() - tempq->start_time;
+				q_time = clock() - tempq->entry_time;
 				low_time += (double)q_time;
 				lowq++;
 			}
@@ -288,12 +288,12 @@ void send2recp(int *fd1, int *fd2, int *fd3) {
 				highq++;
 			}
 			else if (60 >= tempq->packet > 29){
-				q_time = clock() - tempq->start_time;
+				q_time = clock() - tempq->entry_time;
 				med_time += (double)q_time;
 				medq++;
 			}
 			else if (0 <= tempq->packet < 30){
-				q_time = clock() - tempq->start_time;
+				q_time = clock() - tempq->entry_time;
 				low_time += (double)q_time;
 				lowq++;
 			}
@@ -318,7 +318,7 @@ void send2recp(int *fd1, int *fd2, int *fd3) {
 	double avg_ht = high_time/highq; 
 	double avg_mt = med_time/medq;
 	double avg_lt = low_time/lowq;
-	printf("average time for high priority packets: %d\nAverage time for medium priority packets: %d\nAverage time for low priority packets: %d\n", avg_ht, avg_mt, avg_lt);
+	printf("\naverage time for high priority packets: %f\nAverage time for medium priority packets: %f\nAverage time for low priority packets: %f\n", avg_ht, avg_mt, avg_lt);
 	printf("Number of high priority packets processed: %d\nNumber of medium priority packets: %d\nNumber of low priority packets processed: %d\n", highq, medq, lowq);
 }
 
