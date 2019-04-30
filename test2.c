@@ -108,7 +108,7 @@ void send2recp(int *fd1, int *fd2, int *fd3) {
     int i, highq = 0, lowq = 0, medq = 0; 
 	struct Priority *pq; 
 	pq = (struct Priority *) calloc(1,sizeof(struct Priority));
-	read(fd[4], pq, sizeof(struct Priority));
+	read(fd4[0], pq, sizeof(struct Priority));
     /*
 		Read from pipe4 (fd4) the Priority structure
 		** see qManage/add2q for example
