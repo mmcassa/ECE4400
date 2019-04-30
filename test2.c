@@ -145,7 +145,7 @@ void send2recp(int *fd1, int *fd2, int *fd3) {
 			break;
 		}
 		i++;
-		sleep(5);
+		sleep(.005);
 
 		/*
 
