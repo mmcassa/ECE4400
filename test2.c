@@ -7,11 +7,12 @@
 #include <sys/wait.h> 
 #include <sys/mman.h>
 #include <time.h>
+#include <math.h>
 
-#define SMART_TIME 1   // Smart packet dropping period
+#define SMART_TIME 10   // Smart packet dropping period
 #define QUEUE_TIME 10   // Packet bumping
-#define ARIV_TIME .05 // 10 microsecond
-#define MAX_QUEUE 100
+#define ARIV_TIME .5 // 10 microsecond
+#define MAX_QUEUE 5
 // Struct defintion
 struct Queue {
     struct Queue    *next;
@@ -24,13 +25,10 @@ struct Queue {
 struct Priority {
     struct Queue *low,*med,*high;
     unsigned int max_q; // Maximum number of items in any of the queues
-    //unsigned int count[3]; // 0 is low, 1 is medium, 2 is high
 };
 
 // Struct for last queued packets
 struct SmartPacket {
-    struct SmartPacket *next;
-    int         packet;
     clock_t     entry_time;
 };
 
@@ -65,15 +63,13 @@ void init_priority(struct Priority *p) {
     p->med = NULL;
     p->high = NULL;
     p->max_q = MAX_QUEUE;
-    //p->count[0] = 0;
-    //p->count[1] = 0;
-    //p->count[2] = 0;
 
 }
 
 /*  */
 struct Queue * createPacket(int val) {
-    struct Queue *q = (struct Queue *) create_shared_memory(sizeof(struct Queue));
+    void * shmem = create_shared_memory(sizeof(struct Queue));
+    struct Queue *q = (struct Queue *) shmem;
     q->packet = val;
     q->next = NULL;
     q->entry_time = clock();
@@ -83,27 +79,21 @@ struct Queue * createPacket(int val) {
 /* Checks to see if a packet can be ignored (redundancy check) */
 int checkSmart(struct SmartPacket *sp,int value) {
     int drop = 0;
-    struct SmartPacket *t;
-    t = sp;
     double cur;
-    while(t != NULL) {
-        // If the packets are saying the same thing
-        if (t->packet == value) {
-            cur = (double)(clock()-t->entry_time)/CLOCKS_PER_SEC;
-            if (cur < SMART_TIME) 
-                drop = 1;
-                break;
-        }
-        t = t->next;
-    }
+
+    cur = (double)(clock()-sp[256].entry_time)/CLOCKS_PER_SEC;
+    if (cur < SMART_TIME) 
+        drop = 1;
     return drop;
 }
 
 int numInQueue(struct Queue *q) {
     struct Queue *t = q;
     int i=0;
+    printf("\n");
     while(t != NULL) {
         i++;
+        printf("%d ",t->packet);
         t = t->next;
     }
     return i;   
@@ -126,12 +116,7 @@ void qManage(char *argv[],int *share1, int *share2,int *share3, struct Priority 
     // Start Management
 
     while(*share3 != 1) {
-        //printf("%f",((double)(clock()-start))/CLOCKS_PER_SEC);
-        if(((double)(clock()-start))/CLOCKS_PER_SEC > future) {
-            //printf("low: %d, med %d, high %d\n",numInQueue(pq->low),numInQueue(pq->med),numInQueue(pq->high));
-            future = (double)(clock()-start)/CLOCKS_PER_SEC +1;
-        }
-        ////read(fd3[0],&done,sizeof(int));
+        //printf("low: %d, med %d, high %d\n",numInQueue(pq->low),numInQueue(pq->med),numInQueue(pq->high));
     }
     printf("exit manage\n");
 
@@ -145,7 +130,7 @@ void add2queue(char *argv[],int *share1, int *share2,int *share3, struct Priorit
     unsigned long int smartDrop = 0,i;
     unsigned long int lost[] = {0,0,0};
     char init4[100],byte;
-
+    double starT,stoP;
     double future;
     clock_t start = clock();
     future = (double)(clock()-start)/CLOCKS_PER_SEC+.05;
@@ -163,24 +148,20 @@ void add2queue(char *argv[],int *share1, int *share2,int *share3, struct Priorit
     unsigned long int f_size = (unsigned long int) ftell(fpt);
     rewind(fpt);
     printf("Number of packets to be sent: %li\n",f_size);
-
-    
-
-    // Copy pointer from pipe
-
     printf("Confirm max queue: %d\n",pq->max_q);
     
     struct SmartPacket *smartQ;
+    smartQ = (struct SmartPacket *) calloc(256,sizeof(struct SmartPacket));
     smartQ = NULL;
     i = 0;
     printf("%li %li\n",i,f_size);
     // //read bytes from a file as input data 
     while( i < f_size) {
-
-        //printf("%li\n",i);
+        
         fread(&byte,1,sizeof(char),fpt);
-        if(checkSmart(smartQ,0) == 0) {
-            bVal = (int) byte;
+        bVal = (int) byte;
+        if(checkSmart(smartQ,bVal) == 0) {
+            
             if (bVal < 30) {
                 qt = pq->low;
                 for(j=0;j<pq->max_q;j++) {
@@ -239,15 +220,18 @@ void add2queue(char *argv[],int *share1, int *share2,int *share3, struct Priorit
         } else {
             smartDrop++;
         }
-
+        
         i++;
-        if (i % 80 == 0 || i == 6) {
-            printf("low: %d, med %d, high %d\n",numInQueue(pq->low),numInQueue(pq->med),numInQueue(pq->high));
+        if (i % 100 == 0 || i == 6) {
+            //printf("low: %d, med %d, high %d\n",numInQueue(pq->low),numInQueue(pq->med),numInQueue(pq->high));
+            //printf("%f",((double)(clock()-start))/CLOCKS_PER_SEC);
         }
         if(((double)(clock()-start))/CLOCKS_PER_SEC > future) {
-            printf("low: %d, med %d, high %d\n",numInQueue(pq->low),numInQueue(pq->med),numInQueue(pq->high));
+            //printf("low: %d, med %d, high %d\n",numInQueue(pq->low),numInQueue(pq->med),numInQueue(pq->high));
             future = (double)(clock()-start)/CLOCKS_PER_SEC +.05;
         }
+        //starT = getCurrentTimestamp();
+        //while ((getCurrentTimestamp()-starT)*1000 < ARIV_TIME) {};
         sleep(ARIV_TIME);
     }
     i = 1;
@@ -255,6 +239,7 @@ void add2queue(char *argv[],int *share1, int *share2,int *share3, struct Priorit
 
     fclose(fpt);
     ////write(share1[1],&i,sizeof(int));
+    
     *share1 = 1;
     printf("\nSmart Dropped packet Count: %ld\n",smartDrop);
     printf("Lost packets (Low, Med, High): %ld %ld %ld\n",lost[0],lost[1],lost[2]);
@@ -265,26 +250,30 @@ void add2queue(char *argv[],int *share1, int *share2,int *share3, struct Priorit
 
 //wait for alleged packet send time
 void send2recp(int *share1, int *share2,int *share3, struct Priority *pq) {//int *fd2, int *fd3,int *fd4) {
-    int *done,i, highq = 0, lowq = 0, medq = 0; 
+    int *done,i=0, highq = 0, lowq = 0, medq = 0; 
 	//struct Priority *pq; 
 	//pq = (struct Priority *) calloc(1,sizeof(struct Priority));
-	sleep(.5);
+	//sleep(.5);
     //read(fd4[0], pq, sizeof(struct Priority));
     /*
 		//read from pipe4 (fd4) the Priority structure
 		** see qManage/add2q for example
 	*/
-    pq->max_q = 50;
+    //pq->max_q = 50;
     printf("Confirm max queue send: %d\n",pq->max_q);
     done = share1;
+    //done = 0;   
     printf("%d",*done);
 	struct Queue *tempq;
 	clock_t q_time;
 	double low_time, high_time, med_time;
-    while(1) {
-		////read(share1[0],&done,sizeof(int));
-		if (pq->high != NULL){
+    low_time = high_time = med_time = 0;
+    //sleep(1);
+    printf("*%d %d\n",*share1,*done);
+    while(*share1 != 1 || *done == 0) {
 
+		if (pq->high != NULL){
+            printf("h");
 			tempq = pq->high;
 			pq->high = pq->high->next; 
 			if (tempq->packet > 59)	{
@@ -302,9 +291,10 @@ void send2recp(int *share1, int *share2,int *share3, struct Priority *pq) {//int
 				low_time += (double)q_time;
 				lowq++;
 			}
-			free(tempq);
+			//free(tempq);
 		}
 		else if (pq->med != NULL){
+            printf("m");
 			tempq = pq->med; 
 			pq->med = pq->med->next;
 			if (tempq->packet > 59){
@@ -317,14 +307,15 @@ void send2recp(int *share1, int *share2,int *share3, struct Priority *pq) {//int
 				med_time += (double)q_time;
 				medq++;
 			}
-			else if (0 <= tempq->packet < 30){
+			else {
 				q_time = clock() - tempq->entry_time;
 				low_time += (double)q_time;
 				lowq++;
 			}
-			free(tempq);
+			//free(tempq);
 		}
 		else if (pq->low != NULL){
+            printf("l");
 			tempq = pq->low;
 			pq->low = pq->low->next; 
 			if (tempq->packet > 59)	{
@@ -337,25 +328,31 @@ void send2recp(int *share1, int *share2,int *share3, struct Priority *pq) {//int
 				med_time += (double)q_time;
 				medq++;
 			}
-			else if (0 <= tempq->packet < 30){
+			else {
 				q_time = clock() - tempq->entry_time;
 				low_time += (double)q_time;
 				lowq++;
 			}
-			free(tempq);
+			//free(tempq);
 		}
-		else if (*done == 1){
-			break;
-		}
-		i++;
-		sleep(.005);
+		else if (*share1 == 0){
+			//break;
+		} else {
+            done = 0;
+        }
+		//sleep(.005);
+        i++;
+        if (i % 10) {
+            //printf("%d %d %d\n\n",pq->low,pq->med,pq->high);
+        }
     }
-    *share3 = 1;
+    
 	double avg_ht = high_time/highq; 
 	double avg_mt = med_time/medq;
 	double avg_lt = low_time/lowq;
 	printf("\nAverage time for high priority packets: %f\nAverage time for medium priority packets: %f\nAverage time for low priority packets: %f\n", avg_ht, avg_mt, avg_lt);
 	printf("Number of high priority packets processed: %d\nNumber of medium priority packets: %d\nNumber of low priority packets processed: %d\n", highq, medq, lowq);
+    *share3 = 1;
 }
 
 int main(int argc, char *argv[]) {
@@ -400,13 +397,16 @@ int main(int argc, char *argv[]) {
     } else {
         
         pid2 = fork();
-        if (pid2 == 0) {
+        if (pid2 != 0) {
             add2queue(argv,share1,share2,share3,pq);//fd2,fd3,fd4);
+            wait(NULL);
         } else {
             qManage(argv,share1,share2,share3,pq);//,fd2,fd3,fd4);
+            wait(NULL);
         }
         
     }
+
 
     return 0;
 } 
