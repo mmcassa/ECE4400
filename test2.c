@@ -9,10 +9,10 @@
 #include <time.h>
 #include <math.h>
 
-#define SMART_TIME 100000   // Smart packet dropping period
-#define QUEUE_TIME 10   // Packet bumping
-#define ARIV_TIME .5 // 10 microsecond
-#define MAX_QUEUE 10
+#define SMART_TIME .01   // Smart packet dropping period
+#define QUEUE_TIME .1   // Packet bumping
+#define ARIV_TIME .005 // 10 microsecond
+#define MAX_QUEUE 50
 // Struct defintion
 struct Queue {
     struct Queue    *next;
@@ -94,7 +94,6 @@ int numInQueue(struct Queue *q,int m) {
     struct Queue *t;
     t = q;
     int i=0;
-    //printf("\n");
     while(i<m) {
         printf("%d ",t->packet);
         if (t->packet != -1) {
@@ -115,15 +114,13 @@ void qManage(char *argv[],int *share1, int *share2,int *share3, struct Priority 
     future = (double)(clock()-start)/CLOCKS_PER_SEC+1;
     // Initialize Priority Queue and //write the pointer to pipe 4
     
-    
-    ////write(fd4[1],pq,sizeof(struct Priority ));
     printf("Max packets in each Queue: %d\n",pq->max_q);
-    ////write(fd4[1],pq,sizeof(struct Priority ));
-    ////read(fd3[0],&done,sizeof(int));
     // Start Management
 
     while(*share3 != 1) {
-        //printf("low: %d, med %d, high %d\n",numInQueue(pq->low),numInQueue(pq->med),numInQueue(pq->high));
+        if ((double)(clock()-pq->med->entry_time)/CLOCKS_PER_SEC > QUEUE_TIME) {
+            printf("E");
+        }
     }
     printf("exit manage\n");
 
@@ -277,7 +274,7 @@ void send2recp(int *share1, int *share2,int *share3, struct Priority *pq) {//int
 				high_time += (double)q_time;
 				highq++;
 			}
-			else if (60 >= tempq->packet > 29){
+			else if (59 >= tempq->packet > 29){
 				q_time = clock() - tempq->entry_time;
 				med_time += (double)q_time;
 				medq++;
@@ -299,7 +296,7 @@ void send2recp(int *share1, int *share2,int *share3, struct Priority *pq) {//int
 				high_time += q_time;
 				highq++;
 			}
-			else if (60 >= tempq->packet > 29){
+			else if (59 >= tempq->packet > 29){
 				q_time = clock() - tempq->entry_time;
 				med_time += (double)q_time;
 				medq++;
@@ -321,7 +318,7 @@ void send2recp(int *share1, int *share2,int *share3, struct Priority *pq) {//int
 				high_time += q_time;
 				highq++;
 			}
-			else if (60 >= tempq->packet > 29){
+			else if (59 >= tempq->packet > 29){
 				q_time = clock() - tempq->entry_time;
 				med_time += (double)q_time;
 				medq++;
@@ -433,7 +430,6 @@ int main(int argc, char *argv[]) {
     
     // Add2q
     if (pid == 0) {
-
         send2recp(share1,share2,share3,pq);
         
     // Send2recip
